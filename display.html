@@ -41,12 +41,12 @@
     -webkit-text-stroke:2px #7A0000;text-shadow:3px 4px 0 #7A0000;}
   .pc-label{font-size:30px;line-height:.9;letter-spacing:1px;color:#fff;
     -webkit-text-stroke:1.5px #7A0000;text-shadow:2px 3px 0 #7A0000;}
-  .pc-star{position:absolute;right:-10px;bottom:74px;width:190px;height:190px;cursor:pointer;
+  .pc-star{position:absolute;right:-10px;bottom:74px;width:209px;height:209px;cursor:pointer;
     background:#00B7FF;transform:rotate(-8deg);display:flex;align-items:center;justify-content:center;
     filter:drop-shadow(0 8px 10px rgba(0,0,0,.35));
     clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);}
   .pc-star.strike{background:#E40000;}
-  .pc-star .rank{font-size:70px;line-height:1;color:#fff;transform:rotate(8deg);white-space:nowrap;
+  .pc-star .rank{font-size:58px;line-height:1;color:#fff;transform:translateY(-8px) rotate(8deg);white-space:nowrap;
     -webkit-text-stroke:2px #0B3A52;text-shadow:2px 3px 0 #0B3A52;display:none;}
   .pc-star.strike .rank{-webkit-text-stroke:2px #5a0000;text-shadow:2px 3px 0 #5a0000;}
   .pc-star.revealed .rank{display:block;animation:starPop .4s cubic-bezier(.34,1.56,.64,1) both;}
@@ -70,7 +70,7 @@
 
   @keyframes cardIn{from{transform:translateX(-130%);opacity:0;}to{transform:translateX(0);opacity:1;}}
   @keyframes cardOut{from{transform:translateX(0);opacity:1;}to{transform:translateX(-130%);opacity:0;}}
-  @keyframes starPop{0%{transform:rotate(8deg) scale(0);}65%{transform:rotate(8deg) scale(1.18);}100%{transform:rotate(8deg) scale(1);}}
+  @keyframes starPop{0%{transform:translateY(-8px) rotate(8deg) scale(0);}65%{transform:translateY(-8px) rotate(8deg) scale(1.18);}100%{transform:translateY(-8px) rotate(8deg) scale(1);}}
   @keyframes panelIn{from{transform:translateY(40px);opacity:0;}to{transform:translateY(0);opacity:1;}}
 </style>
 </head>
@@ -181,7 +181,7 @@ function showCard(lg, label, silent){
   const rankTxt = strike ? (lg.rank === 999 ? 'OUT' : '#' + lg.rank) : '#' + lg.rank;
   rankEl.textContent = rankTxt;
   // shrink so 2–3 digit ranks and "OUT" still fit inside the star
-  rankEl.style.fontSize = (rankTxt.length >= 4 ? 42 : rankTxt.length === 3 ? 54 : 70) + 'px';
+  rankEl.style.fontSize = (rankTxt.length >= 4 ? 38 : rankTxt.length === 3 ? 46 : 58) + 'px';
 
   const star = document.getElementById('pcStar');
   star.classList.remove('revealed');
@@ -201,7 +201,7 @@ function showCard(lg, label, silent){
     card.classList.remove('show','out'); void card.offsetWidth; card.classList.add('show');
     if(revealTimer) clearTimeout(revealTimer);
     if(revealMode === 'auto' && !silent){
-      revealTimer = setTimeout(() => star.classList.add('revealed'), 1800);
+      revealTimer = setTimeout(revealNow, 1800);
     }
   };
 
@@ -214,9 +214,12 @@ function showCard(lg, label, silent){
     launch();
   });
 }
-document.getElementById('pcStar').addEventListener('click', () => {
+// Reveal the rank AND commit the held scoreboard (scores + outs update now, not when the card appears).
+function revealNow(){
   document.getElementById('pcStar').classList.add('revealed');
-});
+  if(pendingPlayers){ committedPlayers = pendingPlayers; pendingPlayers = null; renderBoard(committedPlayers); }
+}
+document.getElementById('pcStar').addEventListener('click', revealNow);
 
 /* ---- scoreboard ---- */
 function renderBoard(players){
@@ -266,14 +269,16 @@ function dismissCard(){
 
 /* ---- state handling (same schema the host publishes) ---- */
 let prevLast = null;
+let committedPlayers = null;   // scoreboard currently shown
+let pendingPlayers = null;     // latest scores/outs, held until the rank is revealed
 function handleState(state){
   if(!state) return;
   if(state.status === 'layout'){ applyLayout(state.layout); return; }
-  if(state.status === 'reveal'){ document.getElementById('pcStar').classList.add('revealed'); return; }
+  if(state.status === 'reveal'){ revealNow(); return; }
   if(state.status === 'dismiss'){ dismissCard(); return; }
   if(state.layout) applyLayout(state.layout);
   if(state.status === 'reset'){
-    prevLast = null;
+    prevLast = null; committedPlayers = null; pendingPlayers = null;
     if(revealTimer) clearTimeout(revealTimer);
     document.getElementById('card').classList.remove('show');
     document.getElementById('scorePanel').innerHTML = '';
@@ -292,8 +297,18 @@ function handleState(state){
   players.forEach(p => { nb[p.name] = p.lastGuess ? JSON.stringify(p.lastGuess) : ''; });
   prevLast = nb;
 
-  renderBoard(players);
-  if(changed) showCard(changed.lastGuess, labelFor(state), isFirst);
+  if(changed){
+    // A new guess arrived: keep the scoreboard (scores + outs) frozen at its prior values
+    // and only reveal the new totals when the host reveals the rank.
+    if(pendingPlayers) committedPlayers = pendingPlayers;   // flush any prior card that was never revealed
+    pendingPlayers = players;
+    renderBoard(committedPlayers || players);
+    showCard(changed.lastGuess, labelFor(state), isFirst);
+  } else {
+    committedPlayers = players;
+    pendingPlayers = null;
+    renderBoard(players);
+  }
 }
 
 /* ---- live sync (Firebase Realtime Database) ---- */
