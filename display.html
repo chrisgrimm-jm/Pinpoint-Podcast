@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Pinpoint — Display / OBS Overlay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;background:transparent;}
+  body{font-family:'Bebas Neue',sans-serif;}
+
+  /* fixed 1920x1080 design, scaled to fit the window (OBS: set source to 1920x1080 for 1:1) */
+  #fit{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;}
+  #stage{position:relative;width:1920px;height:1080px;overflow:hidden;transform-origin:center center;}
+  #backdrop{position:absolute;inset:0;background:#211f2e;display:none;}
+  #stage.showbg #backdrop{display:block;}
+
+  /* ---------- CARD ---------- */
+  #card{position:absolute;left:52px;top:46px;width:512px;height:772px;display:none;}
+  #card.show{display:block;animation:cardIn .55s cubic-bezier(.34,1.56,.64,1) both;}
+  .card-inner{width:100%;height:100%;background:#FBE23E;border-radius:26px;
+    box-shadow:0 24px 60px rgba(0,0,0,.55);display:flex;flex-direction:column;
+    padding:18px 20px 0;position:relative;}
+  .pc-name{font-size:58px;line-height:.92;letter-spacing:1px;color:#00B7FF;
+    -webkit-text-stroke:2px #0B4C6E;text-shadow:3px 4px 0 #0B4C6E;
+    padding:4px 4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .pc-photo{flex:1;min-height:0;background:#fff;border-radius:16px;padding:12px;
+    box-shadow:0 3px 0 rgba(0,0,0,.15);overflow:hidden;}
+  .pc-photo-img{width:100%;height:100%;border-radius:9px;overflow:hidden;background:#d9d9d9;
+    background-size:cover;background-position:center top;background-repeat:no-repeat;
+    position:relative;display:flex;align-items:center;justify-content:center;}
+  .pc-loading{color:#9a9a9a;font-size:30px;letter-spacing:3px;}
+  .pc-footer{background:#E40000;margin:0 -20px;border-radius:0 0 26px 26px;
+    padding:14px 24px 20px;display:flex;align-items:baseline;gap:14px;}
+  .pc-value{font-size:56px;line-height:.9;color:#FCE24A;
+    -webkit-text-stroke:2px #7A0000;text-shadow:3px 4px 0 #7A0000;}
+  .pc-label{font-size:30px;line-height:.9;letter-spacing:1px;color:#fff;
+    -webkit-text-stroke:1.5px #7A0000;text-shadow:2px 3px 0 #7A0000;}
+  .pc-star{position:absolute;right:-10px;bottom:74px;width:190px;height:190px;cursor:pointer;
+    background:#00B7FF;transform:rotate(-8deg);display:flex;align-items:center;justify-content:center;
+    filter:drop-shadow(0 8px 10px rgba(0,0,0,.35));
+    clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);}
+  .pc-star.strike{background:#E40000;}
+  .pc-star .rank{font-size:70px;line-height:1;color:#fff;transform:rotate(8deg);
+    -webkit-text-stroke:2px #0B3A52;text-shadow:2px 3px 0 #0B3A52;display:none;}
+  .pc-star.strike .rank{-webkit-text-stroke:2px #5a0000;text-shadow:2px 3px 0 #5a0000;}
+  .pc-star.revealed .rank{display:block;animation:starPop .4s cubic-bezier(.34,1.56,.64,1) both;}
+
+  /* ---------- SCOREBOARD ---------- */
+  #board{position:absolute;right:52px;bottom:58px;display:flex;flex-direction:column;gap:16px;
+    animation:panelIn .45s cubic-bezier(.22,1,.36,1) both;}
+  .panel{background:#F3EFCB;border:3px solid #17161F;border-radius:16px;
+    box-shadow:0 8px 0 rgba(0,0,0,.22);display:flex;}
+  #scorePanel{padding:12px 6px;}
+  #strikePanel{padding:10px 6px;}
+  .col{flex:1;text-align:center;min-width:170px;padding:2px 26px;}
+  .col + .col{border-left:2px solid rgba(23,22,31,.32);}
+  .col .nm{font-size:44px;line-height:1;letter-spacing:1px;
+    -webkit-text-stroke:2px #17161F;text-shadow:2px 3px 0 #17161F;}
+  .col .sc{font-size:40px;line-height:1;letter-spacing:1px;margin-top:3px;
+    -webkit-text-stroke:2px #17161F;text-shadow:2px 3px 0 #17161F;}
+  .col .st{font-size:46px;line-height:1;letter-spacing:6px;
+    -webkit-text-stroke:2px #17161F;text-shadow:2px 3px 0 #17161F;}
+
+  @keyframes cardIn{from{transform:translateX(-130%);opacity:0;}to{transform:translateX(0);opacity:1;}}
+  @keyframes starPop{0%{transform:rotate(8deg) scale(0);}65%{transform:rotate(8deg) scale(1.18);}100%{transform:rotate(8deg) scale(1);}}
+  @keyframes panelIn{from{transform:translateY(40px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+</style>
+</head>
+<body>
+<div id="fit">
+  <div id="stage">
+    <div id="backdrop"></div>
+
+    <div id="card">
+      <div class="card-inner">
+        <div class="pc-name" id="pcName"></div>
+        <div class="pc-photo"><div class="pc-photo-img" id="pcPhoto"><span class="pc-loading" id="pcLoading">LOADING…</span></div></div>
+        <div class="pc-footer">
+          <span class="pc-value" id="pcValue"></span>
+          <span class="pc-label" id="pcLabel"></span>
+        </div>
+        <div class="pc-star" id="pcStar"><span class="rank" id="pcRank"></span></div>
+      </div>
+    </div>
+
+    <div id="board">
+      <div class="panel" id="scorePanel"></div>
+      <div class="panel" id="strikePanel"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const params  = new URLSearchParams(location.search);
+const topic   = params.get('topic') || '';
+const showBg  = params.get('bg') === 'solid';       // ?bg=solid to preview off-stream (default transparent)
+const revealMode = params.get('reveal') || 'click'; // 'click' (default) or 'auto'
+
+if (showBg) document.getElementById('stage').classList.add('showbg');
+
+/* ---- fit the 1920x1080 stage into the window (OBS: set source to 1920x1080 = 1:1) ---- */
+function fitStage(){
+  const s = Math.min(window.innerWidth/1920, window.innerHeight/1080);
+  document.getElementById('stage').style.transform = 'scale(' + s + ')';
+}
+window.addEventListener('resize', fitStage); fitStage();
+
+/* ---- MLB player photo lookup (by name) ---- */
+const photoCache = {};
+function headshot(id){
+  return 'https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_480,q_auto:best/v1/people/' + id + '/headshot/67/current';
+}
+function lookupPhoto(name, forName){
+  const photo = document.getElementById('pcPhoto');
+  const loading = document.getElementById('pcLoading');
+  photo.style.backgroundImage = 'none';
+  loading.style.display = 'block';
+  if(!name){ loading.style.display='none'; return; }
+  const apply = (url) => {
+    if(currentCardName !== forName) return;      // a newer card arrived; ignore
+    photo.style.backgroundImage = 'url("' + url + '")';
+    loading.style.display = 'none';
+  };
+  if(photoCache[name]){ apply(photoCache[name]); return; }
+  fetch('https://statsapi.mlb.com/api/v1/people/search?names=' + encodeURIComponent(name))
+    .then(r => r.json())
+    .then(d => {
+      const p = (d.people || [])[0];
+      if(p && p.id){ photoCache[name] = headshot(p.id); apply(photoCache[name]); }
+      else if(currentCardName === forName){ loading.style.display='none'; }
+    })
+    .catch(() => { if(currentCardName === forName) loading.style.display='none'; });
+}
+
+/* ---- card ---- */
+let currentCardName = '';
+let revealTimer = null;
+
+function labelFor(state){
+  const title = (state.title || '').toUpperCase();
+  const first = ((state.meta || '').split('·')[0] || '').trim();
+  let prefix = '';
+  if(/all-time/i.test(first)) prefix = 'CAREER ';
+  else if(first) prefix = first.toUpperCase() + ' ';
+  return (prefix + title).trim();
+}
+
+function showCard(lg, label, silent){
+  const strike = !!lg.strike;
+  const name = (lg.player || '').toUpperCase();
+  currentCardName = name;
+
+  document.getElementById('pcName').textContent  = name;
+  document.getElementById('pcValue').textContent = lg.value || '';
+  document.getElementById('pcLabel').textContent = label;
+  document.getElementById('pcRank').textContent  = strike ? (lg.rank === 999 ? 'OUT' : '#' + lg.rank) : '#' + lg.rank;
+
+  const star = document.getElementById('pcStar');
+  star.classList.remove('revealed');
+  star.classList.toggle('strike', strike);
+
+  const card = document.getElementById('card');
+  card.classList.remove('show'); void card.offsetWidth; card.classList.add('show');
+
+  lookupPhoto(lg.player, name);
+
+  if(revealTimer) clearTimeout(revealTimer);
+  if(revealMode === 'auto' && !silent){
+    revealTimer = setTimeout(() => star.classList.add('revealed'), 1800);
+  }
+}
+document.getElementById('pcStar').addEventListener('click', () => {
+  document.getElementById('pcStar').classList.add('revealed');
+});
+
+/* ---- scoreboard ---- */
+function renderBoard(players){
+  const score = document.getElementById('scorePanel');
+  const strike = document.getElementById('strikePanel');
+  score.innerHTML = '';
+  strike.innerHTML = '';
+  (players || []).forEach(p => {
+    const color = p.color || '#fff';
+    const sc = document.createElement('div');
+    sc.className = 'col';
+    sc.innerHTML = '<div class="nm" style="color:' + color + '">' + (p.name || '').toUpperCase() + '</div>'
+                 + '<div class="sc" style="color:' + color + '">' + p.score + '</div>';
+    score.appendChild(sc);
+
+    const st = document.createElement('div');
+    st.className = 'col';
+    const hasStrikes = p.strikes > 0;
+    const txt = hasStrikes ? 'X'.repeat(Math.min(p.strikes, 3)) : '–';
+    st.innerHTML = '<div class="st" style="color:' + (hasStrikes ? color : 'rgba(23,22,31,.35)') + '">' + txt + '</div>';
+    strike.appendChild(st);
+  });
+}
+
+/* ---- state handling (same schema the host publishes) ---- */
+let prevLast = null;
+function handleState(state){
+  if(!state) return;
+  if(state.status === 'reset'){
+    prevLast = null;
+    if(revealTimer) clearTimeout(revealTimer);
+    document.getElementById('card').classList.remove('show');
+    document.getElementById('scorePanel').innerHTML = '';
+    document.getElementById('strikePanel').innerHTML = '';
+    return;
+  }
+  const players = state.players || [];
+  const prev = prevLast || {};
+  let changed = null;
+  for(const p of players){
+    const cur = p.lastGuess ? JSON.stringify(p.lastGuess) : '';
+    if(p.lastGuess && cur !== (prev[p.name] || '')) changed = p;
+  }
+  const isFirst = prevLast === null;
+  const nb = {};
+  players.forEach(p => { nb[p.name] = p.lastGuess ? JSON.stringify(p.lastGuess) : ''; });
+  prevLast = nb;
+
+  renderBoard(players);
+  if(changed) showCard(changed.lastGuess, labelFor(state), isFirst);
+}
+
+/* ---- live sync ---- */
+if(topic){
+  fetch('https://ntfy.sh/' + topic + '/json?poll=1&since=10m')
+    .then(r => r.text()).then(t => {
+      const lines = t.trim().split('\n').filter(Boolean);
+      if(!lines.length) return;
+      try { const m = JSON.parse(lines[lines.length - 1]); if(m.message) handleState(JSON.parse(m.message)); } catch(e){}
+    }).catch(() => {});
+  const es = new EventSource('https://ntfy.sh/' + topic + '/sse');
+  es.addEventListener('message', e => {
+    try { const m = JSON.parse(e.data); if(m.message) handleState(JSON.parse(m.message)); } catch(e){}
+  });
+} else {
+  /* demo state (matches the reference) when no ?topic= is set */
+  handleState({
+    status:'game', title:'WAR', meta:'All-Time · Hitters',
+    players:[
+      {name:'Cohen', score:329, strikes:1, color:'#4ea8de', lastGuess:{player:'Nap Lajoie', value:'106.9', rank:5, strike:false}},
+      {name:'Knorp', score:369, strikes:2, color:'#22c55e', lastGuess:null},
+      {name:'Jolly', score:212, strikes:3, color:'#f97316', lastGuess:null}
+    ]
+  });
+}
+</script>
+</body>
+</html>
