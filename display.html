@@ -316,7 +316,7 @@ if(topic){
   // Fires with the current state on connect (restores after an OBS reload) and on every host update.
   _db.ref('games/' + ppKey(topic) + '/msg').on('value', snap => {
     const m = snap.val();
-    if(m) handleState(m);
+    handleState(m ? m : {status:'reset'});   // empty/cleared topic -> blank the overlay
   });
 } else {
   /* demo state (matches the reference) when no ?topic= is set */
