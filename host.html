@@ -244,7 +244,7 @@ select option,select optgroup{background:#111;}
   <div class="form-row">
     <div class="fg"><label>Player Type</label>
       <select id="groupSel" onchange="updateGroupAndStats()">
-        <option value="hitting">Hitters</option><option value="pitching">Pitchers</option>
+        <option value="hitting">Hitters</option><option value="pitching">Pitchers</option><option value="fielding">Fielders</option>
       </select>
     </div>
     <div class="fg"><label>Position</label>
@@ -258,6 +258,7 @@ select option,select optgroup{background:#111;}
     <div class="fg"><label>Season</label>
       <select id="seasonSel" onchange="onSeasonChange()">
         <option value="career" selected>⭐ All-Time (Career)</option>
+        <option value="allstar">✨ All-Star Game (Career)</option>
         <optgroup label="── Single Season ──────────────">
         <option value="2025">2025</option>
         <option value="2024">2024</option>
@@ -726,26 +727,44 @@ const PITCHING_POSITIONS = [
   {val:'SP',  label:'Starting Pitcher (SP)'},
   {val:'RP',  label:'Relief Pitcher (RP)'},
 ];
+const FIELDING_POSITIONS = [
+  {val:'ALL', label:'All Fielders'},
+  {val:'C',   label:'Catcher (C)'},
+  {val:'1B',  label:'First Base (1B)'},
+  {val:'2B',  label:'Second Base (2B)'},
+  {val:'3B',  label:'Third Base (3B)'},
+  {val:'SS',  label:'Shortstop (SS)'},
+  {val:'LF',  label:'Left Field (LF)'},
+  {val:'CF',  label:'Center Field (CF)'},
+  {val:'RF',  label:'Right Field (RF)'},
+  {val:'OF',  label:'Outfield (OF)'},
+  {val:'P',   label:'Pitcher (P)'},
+];
+
+function statListFor(g){ return g==='hitting'?HITTING_STATS:g==='pitching'?PITCHING_STATS:FIELDING_STATS; }
+function posListFor(g){ return g==='hitting'?HITTING_POSITIONS:g==='pitching'?PITCHING_POSITIONS:FIELDING_POSITIONS; }
 
 function updateGroupAndStats(){
   const g=document.getElementById('groupSel').value;
-  const positions=g==='hitting'?HITTING_POSITIONS:PITCHING_POSITIONS;
-  document.getElementById('positionSel').innerHTML=positions
+  document.getElementById('positionSel').innerHTML=posListFor(g)
     .map(p=>`<option value="${p.val}">${p.label}</option>`).join('');
   updateStats();
 }
 
 function updateStats(){
   const g=document.getElementById('groupSel').value;
-  const list=g==='hitting'?HITTING_STATS:PITCHING_STATS;
+  const list=statListFor(g);
   const sv=document.getElementById('seasonSel').value;
-  const isCareer=sv==='career';
+  const isCareer=sv==='career'||sv==='allstar';
+  const isAllStar=sv==='allstar';
 
   const statSel=document.getElementById('statSel');
   const prevIdx=statSel.value!==''?parseInt(statSel.value):null;
   const prevKey=(prevIdx!==null&&list[prevIdx])?list[prevIdx].key:null;
 
-  const filtered=list.filter(s=>isCareer?s.careerOk:s.type!=='careerAdvanced');
+  // All-Star = single-game samples, so only plain counting totals make sense (no rate/qualified stats).
+  const filtered=list.filter(s=>isAllStar ? (s.type==='season' && !s.pool)
+                                           : (isCareer ? s.careerOk : s.type!=='careerAdvanced'));
   statSel.innerHTML=filtered.map((s)=>`<option value="${list.indexOf(s)}">${s.label}</option>`).join('');
 
   if(prevKey!==null){
@@ -755,10 +774,10 @@ function updateStats(){
 }
 function onSeasonChange(){
   const v=document.getElementById('seasonSel').value;
-  document.getElementById('poolFg').style.display=v==='career'?'none':'';
+  document.getElementById('poolFg').style.display=(v==='career'||v==='allstar')?'none':'';
   updateGroupAndStats();
 }
-document.getElementById('poolFg').style.display=document.getElementById('seasonSel').value==='career'?'none':'';
+document.getElementById('poolFg').style.display=(document.getElementById('seasonSel').value==='career'||document.getElementById('seasonSel').value==='allstar')?'none':'';
 updateGroupAndStats();
 
 // ── Game state ─────────────────────────────────────────────────────────────────
@@ -805,7 +824,7 @@ function inningOrder(inning){
 // ── Start ──────────────────────────────────────────────────────────────────────
 async function startGame(){
   const group=document.getElementById('groupSel').value;
-  const list=group==='hitting'?HITTING_STATS:PITCHING_STATS;
+  const list=statListFor(group);
   const statDef=list[parseInt(document.getElementById('statSel').value)];
   const season=document.getElementById('seasonSel').value;
   const pool=document.getElementById('poolSel').value;
@@ -836,9 +855,10 @@ async function startGame(){
       history:[]
     }));
 
-    const seasonLabel=season==='career'?'All-Time':season;
+    const seasonLabel=season==='career'?'All-Time':season==='allstar'?'All-Star Game':season;
+    const groupLabel=group==='hitting'?'Hitters':group==='pitching'?'Pitchers':'Fielders';
     document.getElementById('gTitle').textContent=statDef.label;
-    document.getElementById('gMeta').textContent=`${seasonLabel} · ${group==='hitting'?'Hitters':'Pitchers'} · ${ORDER_LABELS[orderMode]} · 9 innings`;
+    document.getElementById('gMeta').textContent=`${seasonLabel} · ${groupLabel} · ${ORDER_LABELS[orderMode]} · 9 innings`;
 
     buildInningStrip();
     buildAnswersGrid();

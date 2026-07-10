@@ -125,6 +125,16 @@ const PITCHING_STATS = [
   {key:'ra9War',              label:'RA9-WAR',                 type:'sabermetrics',careerOk:false, fmt:v=>parseFloat(v).toFixed(1),         order:'desc'},
   {key:'pli',                 label:'Leverage Index (pLI)',    type:'sabermetrics',careerOk:false, fmt:v=>parseFloat(v).toFixed(2),         order:'desc'},
 ];
+const FIELDING_STATS = [
+  {key:'putOuts',       label:'Put Outs',        type:'season', careerOk:true, fmt:v=>+v, order:'desc'},
+  {key:'assists',       label:'Assists',         type:'season', careerOk:true, fmt:v=>+v, order:'desc'},
+  {key:'errors',        label:'Errors',          type:'season', careerOk:true, fmt:v=>+v, order:'desc'},
+  {key:'doublePlays',   label:'Double Plays',    type:'season', careerOk:true, fmt:v=>+v, order:'desc'},
+  {key:'triplePlays',   label:'Triple Plays',    type:'season', careerOk:true, fmt:v=>+v, order:'desc'},
+  {key:'chances',       label:'Total Chances',   type:'season', careerOk:true, fmt:v=>+v, order:'desc'},
+  {key:'throwingErrors',label:'Throwing Errors', type:'season', careerOk:true, fmt:v=>+v, order:'desc'},
+  {key:'gamesPlayed',   label:'Games at Position',type:'season',careerOk:true, fmt:v=>+v, order:'desc'},
+];
 
 function logoUrl(id){ return `https://www.mlbstatic.com/team-logos/${id}.svg`; }
 
@@ -180,7 +190,9 @@ async function fetchOneSeason(group, statDef, season, pool, position){
 }
 
 async function fetchPlayers(group, statDef, season, pool, position){
-  const isCareer = season==='career';
+  // 'allstar' = career totals from All-Star Games (gameType A); everything else is regular season (R)
+  const isCareer = season==='career' || season==='allstar';
+  const gameType = season==='allstar' ? 'A' : 'R';
   const order = statDef.order||'desc';
 
   let years = [];
@@ -202,7 +214,7 @@ async function fetchPlayers(group, statDef, season, pool, position){
     const playerPool = 'ALL';
     const statType = statDef.type === 'sabermetrics' ? 'sabermetrics' : 'career';
     const params = new URLSearchParams({
-      stats: statType, group, gameType:'R',
+      stats: statType, group, gameType,
       playerPool, limit:300,
       sortStat:statDef.key, order:'desc'
     });
