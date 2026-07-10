@@ -205,6 +205,18 @@ select option,select optgroup{background:#111;}
     </div>
     <div class="le-controls">
       <div class="le-group">
+        <label>Scoreboard Players</label>
+        <select id="prevPlayers" onchange="setPreviewPlayers(this.value)">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+        </select>
+        <span></span>
+      </div>
+      <div class="le-group">
         <label>Card Size</label>
         <input type="range" min="0.5" max="2" step="0.05" value="1" id="cardScale" oninput="setScale('card',this.value)"/>
         <span id="cardScaleVal">100%</span>
@@ -489,11 +501,24 @@ const LAYOUT_DEFAULT = {card:{x:0,y:0,scale:1}, board:{x:0,y:0,scale:1}};
 let layout = loadLayout();
 
 // Default element boxes in stage coordinates (card anchors top-left, board bottom-right)
-const LE_DEF = {
-  card:  {x:52,   y:46,  w:512, h:772, anchor:'tl'},
-  board: {x:1108, y:792, w:760, h:230, anchor:'br'}
-};
+const LE_DEF = { card: {x:52, y:46, w:512, h:772, anchor:'tl'} };
 const LE_PV = 320/1920; // preview px per stage px (preview is 320px wide)
+
+// How many players to show in the preview scoreboard + the test card (1–6).
+let previewPlayers = Math.min(6, Math.max(1, parseInt(localStorage.getItem('pp_prevPlayers'))||3));
+
+// Board is anchored bottom-right at (1868,1022); its width grows with the player
+// count, so changing the count only changes how far left the scoreboard reaches.
+function leDef(item){
+  if(item!=='board') return LE_DEF.card;
+  const w = previewPlayers*190 + 16;
+  return {x:1868-w, y:792, w:w, h:230, anchor:'br'};
+}
+function setPreviewPlayers(v){
+  previewPlayers = Math.min(6, Math.max(1, parseInt(v)||3));
+  localStorage.setItem('pp_prevPlayers', previewPlayers);
+  renderBox('board');
+}
 
 function loadLayout(){
   try{ const s=localStorage.getItem('pp_layout'); if(s){ const p=JSON.parse(s); if(p&&p.card&&p.board) return p; } }catch(e){}
@@ -505,23 +530,28 @@ function revealRank(){ publish({status:'reveal', ts:Date.now()}); }
 function clearCard(){ publish({status:'dismiss', ts:Date.now()}); }
 
 // Publish a sample card + scoreboard so you can align the layout against a real
-// display before the game starts. Cleared automatically by startGame().
+// display. Clear it yourself with clearTestCard() (starting a game won't remove it).
 function clearTestCard(){ publish({status:'reset', ts:Date.now()}); }
 
 function sendTestCard(){
+  const scores=[329,288,150,410,95,220], strikes=[1,0,2,0,3,1];
+  const guess={player:'Babe Ruth',rank:2,strike:false,value:'714'};
+  const players=[];
+  for(let i=0;i<previewPlayers;i++){
+    players.push({
+      pos:i+1, name:'Player '+(i+1), score:scores[i%6], strikes:strikes[i%6],
+      eliminated:false, color:PLAYER_COLORS[i%6],
+      lastGuess: i===0 ? guess : null,
+      guesses:   i===0 ? [guess] : []
+    });
+  }
   publish({
     status:'game',
     title:'HOME RUNS',
     meta:'All-Time · Hitters · Snake draft · 9 innings',
     inning:1,
     currentPlayerName:'Player 1',
-    players:[
-      {pos:1,name:'Player 1',score:329,strikes:1,eliminated:false,color:PLAYER_COLORS[0],
-        lastGuess:{player:'Babe Ruth',rank:2,strike:false,value:'714'},
-        guesses:[{player:'Babe Ruth',rank:2,strike:false,value:'714'}]},
-      {pos:2,name:'Player 2',score:288,strikes:0,eliminated:false,color:PLAYER_COLORS[1],lastGuess:null,guesses:[]},
-      {pos:3,name:'Player 3',score:150,strikes:2,eliminated:false,color:PLAYER_COLORS[2],lastGuess:null,guesses:[]}
-    ],
+    players,
     layout,
     ts:Date.now()
   });
@@ -545,6 +575,7 @@ function publishLayout(now){
 }
 
 function renderLayoutEditor(){
+  document.getElementById('prevPlayers').value=previewPlayers;
   renderBox('card'); renderBox('board');
   document.getElementById('cardScale').value=layout.card.scale;
   document.getElementById('boardScale').value=layout.board.scale;
@@ -553,7 +584,7 @@ function renderLayoutEditor(){
 }
 
 function renderBox(item){
-  const d=LE_DEF[item], L=layout[item];
+  const d=leDef(item), L=layout[item];
   const el=document.getElementById(item==='card'?'leCard':'leBoard');
   const w=d.w*L.scale, h=d.h*L.scale;
   let left, top;
