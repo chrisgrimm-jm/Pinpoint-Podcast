@@ -19,7 +19,8 @@ nav{display:flex;align-items:center;gap:14px;padding:11px 20px;border-bottom:1px
 .topic-input:focus{border-color:#e63946;}
 .copy-btn{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:1px;background:transparent;color:#555;border:1px solid #222;padding:5px 10px;border-radius:3px;cursor:pointer;transition:all 0.15s;white-space:nowrap;}
 .copy-btn:hover{color:#fff;border-color:#444;}
-#ntfyStatus{font-size:9px;letter-spacing:1px;color:#333;min-width:60px;}
+#ntfyStatus{font-size:9px;letter-spacing:1px;color:#333;min-width:44px;}
+#connStatus{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:1px;color:#666;white-space:nowrap;}
 
 /* ── SETUP ── */
 #setupScreen{max-width:620px;margin:36px auto;padding:0 20px;}
@@ -188,6 +189,7 @@ select option,select optgroup{background:#111;}
     <input class="topic-input" id="topicInput" type="text" placeholder="my-game-topic" oninput="saveTopic()"/>
     <button class="copy-btn" onclick="copyObsUrl()">Copy OBS URL</button>
     <button class="copy-btn" id="layoutToggle" onclick="toggleLayout()">⛶ Layout</button>
+    <span id="connStatus" title="Realtime connection">connecting…</span>
     <span id="ntfyStatus"></span>
   </div>
 </nav>
@@ -472,6 +474,15 @@ const _db = firebase.database();
 // topic -> safe RTDB key (RTDB keys can't contain . # $ [ ] / or whitespace)
 function ppKey(topic){ return topic.trim().replace(/[.#$\[\]\/\s]+/g,'-'); }
 function ppRef(topic){ return _db.ref('games/' + ppKey(topic) + '/msg'); }
+
+// Persistent connection badge so you always know the relay is live.
+_db.ref('.info/connected').on('value', s=>{
+  const c = s.val() === true;
+  const el = document.getElementById('connStatus');
+  if(!el) return;
+  el.textContent = c ? '● Live' : '○ Offline';
+  el.style.color = c ? '#22c55e' : '#e63946';
+});
 
 function getTopic(){ return document.getElementById('topicInput').value.trim(); }
 function saveTopic(){ localStorage.setItem('pp_topic', getTopic()); }
