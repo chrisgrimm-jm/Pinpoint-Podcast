@@ -115,34 +115,33 @@ window.addEventListener('resize', fitStage); fitStage();
 
 /* ---- MLB player photo lookup (by name) ---- */
 const photoCache = {};
+const PHOTO_MAX_WAIT = 3500;   // don't hold the card off-air longer than this if a photo is slow/missing
 function headshot(id){
   return 'https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_480,q_auto:best/v1/people/' + id + '/headshot/67/current';
 }
-function lookupPhoto(name, forName){
-  const photo = document.getElementById('pcPhoto');
-  const loading = document.getElementById('pcLoading');
-  photo.style.backgroundImage = 'none';
-  loading.style.display = 'block';
-  if(!name){ loading.style.display='none'; return; }
-  const apply = (url) => {
-    if(currentCardName !== forName) return;      // a newer card arrived; ignore
-    photo.style.backgroundImage = 'url("' + url + '")';
-    loading.style.display = 'none';
-  };
-  if(photoCache[name]){ apply(photoCache[name]); return; }
+// Resolve name -> player id -> headshot URL, and fully preload the image before
+// calling back with the URL (or null if none found / it failed to load).
+function loadPhoto(name, cb){
+  if(!name){ cb(null); return; }
+  if(photoCache[name]){ cb(photoCache[name]); return; }
   fetch('https://statsapi.mlb.com/api/v1/people/search?names=' + encodeURIComponent(name))
     .then(r => r.json())
     .then(d => {
       const p = (d.people || [])[0];
-      if(p && p.id){ photoCache[name] = headshot(p.id); apply(photoCache[name]); }
-      else if(currentCardName === forName){ loading.style.display='none'; }
+      if(!(p && p.id)){ cb(null); return; }
+      const url = headshot(p.id);
+      const img = new Image();
+      img.onload  = () => { photoCache[name] = url; cb(url); };
+      img.onerror = () => cb(null);
+      img.src = url;
     })
-    .catch(() => { if(currentCardName === forName) loading.style.display='none'; });
+    .catch(() => cb(null));
 }
 
 /* ---- card ---- */
 let currentCardName = '';
 let revealTimer = null;
+let showToken = 0;   // bumped per card so a slow photo from an old card can't fire late
 
 function labelFor(state){
   const title = (state.title || '').toUpperCase();
@@ -157,7 +156,9 @@ function showCard(lg, label, silent){
   const strike = !!lg.strike;
   const name = (lg.player || '').toUpperCase();
   currentCardName = name;
+  const myToken = ++showToken;
 
+  // Build the card content up front, but keep it off-air until the photo is ready.
   document.getElementById('pcName').textContent  = name;
   document.getElementById('pcValue').textContent = lg.value || '';
   document.getElementById('pcLabel').textContent = label;
@@ -171,15 +172,32 @@ function showCard(lg, label, silent){
   star.classList.remove('revealed');
   star.classList.toggle('strike', strike);
 
-  const card = document.getElementById('card');
-  card.classList.remove('show','out'); void card.offsetWidth; card.classList.add('show');
+  const photo   = document.getElementById('pcPhoto');
+  const loading = document.getElementById('pcLoading');
+  photo.style.backgroundImage = 'none';
+  loading.style.display = 'block';
 
-  lookupPhoto(lg.player, name);
+  // Slide the card on only once the photo has loaded (or after a max wait).
+  let launched = false;
+  const launch = () => {
+    if(launched || myToken !== showToken) return;   // superseded by a newer card
+    launched = true;
+    const card = document.getElementById('card');
+    card.classList.remove('show','out'); void card.offsetWidth; card.classList.add('show');
+    if(revealTimer) clearTimeout(revealTimer);
+    if(revealMode === 'auto' && !silent){
+      revealTimer = setTimeout(() => star.classList.add('revealed'), 1800);
+    }
+  };
 
-  if(revealTimer) clearTimeout(revealTimer);
-  if(revealMode === 'auto' && !silent){
-    revealTimer = setTimeout(() => star.classList.add('revealed'), 1800);
-  }
+  const fallback = setTimeout(launch, PHOTO_MAX_WAIT);
+  loadPhoto(lg.player, (url) => {
+    if(myToken !== showToken) return;               // a newer card is now pending
+    if(url){ photo.style.backgroundImage = 'url("' + url + '")'; }
+    loading.style.display = 'none';
+    clearTimeout(fallback);
+    launch();
+  });
 }
 document.getElementById('pcStar').addEventListener('click', () => {
   document.getElementById('pcStar').classList.add('revealed');
