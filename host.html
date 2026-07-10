@@ -449,13 +449,30 @@ select option,select optgroup{background:#111;}
   </div>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
 <script src="shared.js"></script>
 <script>
 const MAX_INNINGS = 9;
 const MAX_STRIKES = 3;
 const DISPLAY_BASE = 'https://chrisgrimm-jm.github.io/Pinpoint-Podcast/display.html';
 
-// ── ntfy ──────────────────────────────────────────────────────────────────────
+// ── Firebase Realtime Database relay ────────────────────────────────────────────
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBG2PS2muH4i27HefuLeBnZWW-TZ5dkMCw",
+  authDomain: "pinpoint-abf21.firebaseapp.com",
+  databaseURL: "https://pinpoint-abf21-default-rtdb.firebaseio.com",
+  projectId: "pinpoint-abf21",
+  storageBucket: "pinpoint-abf21.firebasestorage.app",
+  messagingSenderId: "947703489099",
+  appId: "1:947703489099:web:c4ed96cfbaeeda594463ce"
+};
+firebase.initializeApp(FIREBASE_CONFIG);
+const _db = firebase.database();
+// topic -> safe RTDB key (RTDB keys can't contain . # $ [ ] / or whitespace)
+function ppKey(topic){ return topic.trim().replace(/[.#$\[\]\/\s]+/g,'-'); }
+function ppRef(topic){ return _db.ref('games/' + ppKey(topic) + '/msg'); }
+
 function getTopic(){ return document.getElementById('topicInput').value.trim(); }
 function saveTopic(){ localStorage.setItem('pp_topic', getTopic()); }
 
@@ -471,32 +488,20 @@ function copyObsUrl(){
   });
 }
 
-async function publish(state){
+function publish(state){
   const topic = getTopic();
   if(!topic) return;
   const statusEl = document.getElementById('ntfyStatus');
   statusEl.textContent = 'sending…';
   statusEl.style.color = '#555';
-  try {
-    const r = await fetch('https://ntfy.sh/' + topic, {
-      method: 'POST',
-      body: JSON.stringify(state)
-    });
-    if(r.ok){
-      statusEl.textContent = 'sent ✓';
-      statusEl.style.color = '#22c55e';
-      setTimeout(()=>{ if(statusEl.textContent==='sent ✓') statusEl.textContent=''; }, 2000);
-    } else if(r.status === 429){
-      statusEl.textContent = 'ntfy limit reached';
-      statusEl.style.color = '#e63946';
-    } else {
-      statusEl.textContent = 'error ' + r.status;
-      statusEl.style.color = '#e63946';
-    }
-  } catch(e) {
-    statusEl.textContent = 'offline';
+  ppRef(topic).set(state).then(()=>{
+    statusEl.textContent = 'sent ✓';
+    statusEl.style.color = '#22c55e';
+    setTimeout(()=>{ if(statusEl.textContent==='sent ✓') statusEl.textContent=''; }, 2000);
+  }).catch(e=>{
+    statusEl.textContent = 'error';
     statusEl.style.color = '#e63946';
-  }
+  });
 }
 
 // Restore saved topic
