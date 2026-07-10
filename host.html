@@ -162,6 +162,9 @@ select option,select optgroup{background:#111;}
 .le-group input[type=range]{flex:1;accent-color:#e63946;}
 .le-group span{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;color:#777;min-width:44px;text-align:right;}
 .le-hint{font-size:10px;color:#333;letter-spacing:0.5px;line-height:1.5;}
+.le-btnrow{display:flex;gap:8px;flex-wrap:wrap;}
+.dc-btn.testcard{color:#22c55e;border-color:#14431f;}
+.dc-btn.testcard:hover{background:#08160c;border-color:#22c55e;}
 .copy-btn.active{color:#fff;border-color:#444;background:#1a1a1a;}
 
 /* ── LAYOUT MODAL (available from the nav, on setup + in game) ── */
@@ -211,8 +214,11 @@ select option,select optgroup{background:#111;}
         <input type="range" min="0.5" max="2" step="0.05" value="1" id="boardScale" oninput="setScale('board',this.value)"/>
         <span id="boardScaleVal">100%</span>
       </div>
-      <button class="dc-btn" onclick="resetLayout()">Reset to Default</button>
-      <div class="le-hint">Drag the boxes to reposition · resize with the sliders.<br/>Set this up before you start — changes go live on the display instantly and are remembered.</div>
+      <div class="le-btnrow">
+        <button class="dc-btn testcard" onclick="sendTestCard()">▶ Send Test Card</button>
+        <button class="dc-btn" onclick="resetLayout()">Reset to Default</button>
+      </div>
+      <div class="le-hint">Drag the boxes to reposition · resize with the sliders.<br/>Send a test card to align against a real card + scoreboard on the OBS output — it clears automatically when you start the game.</div>
     </div>
   </div>
 </div>
@@ -497,6 +503,28 @@ function saveLayout(){ localStorage.setItem('pp_layout', JSON.stringify(layout))
 function revealRank(){ publish({status:'reveal', ts:Date.now()}); }
 function clearCard(){ publish({status:'dismiss', ts:Date.now()}); }
 
+// Publish a sample card + scoreboard so you can align the layout against a real
+// display before the game starts. Cleared automatically by startGame().
+function sendTestCard(){
+  publish({
+    status:'game',
+    title:'HOME RUNS',
+    meta:'All-Time · Hitters · Snake draft · 9 innings',
+    inning:1,
+    currentPlayerName:'Player 1',
+    players:[
+      {pos:1,name:'Player 1',score:329,strikes:1,eliminated:false,color:PLAYER_COLORS[0],
+        lastGuess:{player:'Babe Ruth',rank:2,strike:false,value:'714'},
+        guesses:[{player:'Babe Ruth',rank:2,strike:false,value:'714'}]},
+      {pos:2,name:'Player 2',score:288,strikes:0,eliminated:false,color:PLAYER_COLORS[1],lastGuess:null,guesses:[]},
+      {pos:3,name:'Player 3',score:150,strikes:2,eliminated:false,color:PLAYER_COLORS[2],lastGuess:null,guesses:[]}
+    ],
+    layout,
+    ts:Date.now()
+  });
+  setTimeout(()=>publish({status:'reveal', ts:Date.now()}), 500);
+}
+
 function toggleLayout(){
   const m=document.getElementById('layoutModal');
   const show=!m.classList.contains('open');
@@ -755,6 +783,7 @@ async function startGame(){
   btn.disabled=true; ldmsg.style.display='block'; errEl.style.display='none';
 
   try {
+    publish({status:'reset', ts:Date.now()});   // clear any test card / prior game on the display
     const position=document.getElementById('positionSel').value;
     players=await fetchPlayers(group,statDef,season,pool,position);
     orderMode=document.getElementById('orderModeSel').value;
