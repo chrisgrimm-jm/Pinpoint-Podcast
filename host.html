@@ -218,12 +218,12 @@ select option,select optgroup{background:#111;}
       </div>
       <div class="le-group">
         <label>Card Size</label>
-        <input type="range" min="0.5" max="2" step="0.05" value="1" id="cardScale" oninput="setScale('card',this.value)"/>
+        <input type="range" min="0.5" max="2" step="0.05" value="1" id="cardScale" oninput="setScale('card',this.value)" onchange="publishLayout(true)"/>
         <span id="cardScaleVal">100%</span>
       </div>
       <div class="le-group">
         <label>Scoreboard Size</label>
-        <input type="range" min="0.5" max="2" step="0.05" value="1" id="boardScale" oninput="setScale('board',this.value)"/>
+        <input type="range" min="0.5" max="2" step="0.05" value="1" id="boardScale" oninput="setScale('board',this.value)" onchange="publishLayout(true)"/>
         <span id="boardScaleVal">100%</span>
       </div>
       <div class="le-btnrow">
@@ -478,15 +478,23 @@ async function publish(state){
   statusEl.textContent = 'sending…';
   statusEl.style.color = '#555';
   try {
-    await fetch('https://ntfy.sh/' + topic, {
+    const r = await fetch('https://ntfy.sh/' + topic, {
       method: 'POST',
       body: JSON.stringify(state)
     });
-    statusEl.textContent = 'sent ✓';
-    statusEl.style.color = '#22c55e';
-    setTimeout(()=>{ statusEl.textContent = ''; }, 2000);
+    if(r.ok){
+      statusEl.textContent = 'sent ✓';
+      statusEl.style.color = '#22c55e';
+      setTimeout(()=>{ if(statusEl.textContent==='sent ✓') statusEl.textContent=''; }, 2000);
+    } else if(r.status === 429){
+      statusEl.textContent = 'ntfy limit reached';
+      statusEl.style.color = '#e63946';
+    } else {
+      statusEl.textContent = 'error ' + r.status;
+      statusEl.style.color = '#e63946';
+    }
   } catch(e) {
-    statusEl.textContent = 'error';
+    statusEl.textContent = 'offline';
     statusEl.style.color = '#e63946';
   }
 }
@@ -601,7 +609,7 @@ function setScale(item,v){
   layout[item].scale=parseFloat(v);
   document.getElementById(item+'ScaleVal').textContent=Math.round(parseFloat(v)*100)+'%';
   renderBox(item);
-  publishLayout();
+  saveLayout();   // publish happens on slider release (onchange), not on every input, to spare ntfy quota
 }
 
 function resetLayout(){
@@ -624,7 +632,7 @@ function leMove(e){
   layout[leDrag].x=Math.round(leOrig.x+(e.clientX-leStartX)/LE_PV);
   layout[leDrag].y=Math.round(leOrig.y+(e.clientY-leStartY)/LE_PV);
   renderBox(leDrag);
-  publishLayout();
+  // no publish during the drag — one message goes out on release (leUp) to spare ntfy quota
 }
 function leUp(){ if(leDrag){ leDrag=null; publishLayout(true); } }
 
