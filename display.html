@@ -101,7 +101,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
 <script>
-const BUILD = '2026-07-10-e';   // bump on each display change; visible via ?debug=1
+const BUILD = '2026-07-10-f';   // bump on each display change; visible via ?debug=1
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyBG2PS2muH4i27HefuLeBnZWW-TZ5dkMCw",
   authDomain: "pinpoint-abf21.firebaseapp.com",
@@ -226,6 +226,8 @@ document.getElementById('pcStar').addEventListener('click', revealNow);
 function renderBoard(players){
   const score = document.getElementById('scorePanel');
   const strike = document.getElementById('strikePanel');
+  // Hide the whole board when empty, otherwise the cream panel backgrounds show as two blank pills.
+  document.getElementById('board').style.display = (players && players.length) ? 'flex' : 'none';
   score.innerHTML = '';
   strike.innerHTML = '';
   (players || []).forEach(p => {
@@ -282,6 +284,7 @@ function handleState(state){
     prevLast = null; committedPlayers = null; pendingPlayers = null;
     if(revealTimer) clearTimeout(revealTimer);
     document.getElementById('card').classList.remove('show');
+    document.getElementById('board').style.display = 'none';
     document.getElementById('scorePanel').innerHTML = '';
     document.getElementById('strikePanel').innerHTML = '';
     return;
