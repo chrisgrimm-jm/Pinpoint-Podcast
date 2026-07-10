@@ -162,6 +162,18 @@ select option,select optgroup{background:#111;}
 .le-group input[type=range]{flex:1;accent-color:#e63946;}
 .le-group span{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;color:#777;min-width:44px;text-align:right;}
 .le-hint{font-size:10px;color:#333;letter-spacing:0.5px;line-height:1.5;}
+.copy-btn.active{color:#fff;border-color:#444;background:#1a1a1a;}
+
+/* ── LAYOUT MODAL (available from the nav, on setup + in game) ── */
+.layout-modal{position:fixed;top:52px;right:16px;z-index:200;max-width:660px;
+  background:#0d0d0d;border:1px solid #2a2a2a;border-radius:8px;
+  box-shadow:0 20px 60px rgba(0,0,0,.6);padding:16px 18px;display:none;}
+.layout-modal.open{display:block;}
+.lm-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.lm-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:17px;letter-spacing:1px;}
+.lm-close{background:transparent;border:none;color:#555;font-size:20px;line-height:1;cursor:pointer;padding:0 4px;}
+.lm-close:hover{color:#fff;}
+.layout-modal .layout-editor{margin-top:6px;}
 </style>
 </head>
 <body>
@@ -172,9 +184,38 @@ select option,select optgroup{background:#111;}
     <span class="topic-label">Topic</span>
     <input class="topic-input" id="topicInput" type="text" placeholder="my-game-topic" oninput="saveTopic()"/>
     <button class="copy-btn" onclick="copyObsUrl()">Copy OBS URL</button>
+    <button class="copy-btn" id="layoutToggle" onclick="toggleLayout()">⛶ Layout</button>
     <span id="ntfyStatus"></span>
   </div>
 </nav>
+
+<!-- LAYOUT MODAL (open from nav — works on setup screen and during a game) -->
+<div class="layout-modal" id="layoutModal">
+  <div class="lm-hdr">
+    <span class="lm-title">Display Layout</span>
+    <button class="lm-close" onclick="toggleLayout()">✕</button>
+  </div>
+  <div class="layout-editor">
+    <div class="le-preview" id="lePreview">
+      <div class="le-box card" id="leCard" data-item="card"><span>CARD</span></div>
+      <div class="le-box board" id="leBoard" data-item="board"><span>SCORE</span></div>
+    </div>
+    <div class="le-controls">
+      <div class="le-group">
+        <label>Card Size</label>
+        <input type="range" min="0.5" max="2" step="0.05" value="1" id="cardScale" oninput="setScale('card',this.value)"/>
+        <span id="cardScaleVal">100%</span>
+      </div>
+      <div class="le-group">
+        <label>Scoreboard Size</label>
+        <input type="range" min="0.5" max="2" step="0.05" value="1" id="boardScale" oninput="setScale('board',this.value)"/>
+        <span id="boardScaleVal">100%</span>
+      </div>
+      <button class="dc-btn" onclick="resetLayout()">Reset to Default</button>
+      <div class="le-hint">Drag the boxes to reposition · resize with the sliders.<br/>Set this up before you start — changes go live on the display instantly and are remembered.</div>
+    </div>
+  </div>
+</div>
 
 <!-- SETUP -->
 <div id="setupScreen">
@@ -377,27 +418,6 @@ select option,select optgroup{background:#111;}
       <span class="dc-title">On-Air Card</span>
       <button class="dc-btn reveal" onclick="revealRank()">★ Reveal Rank</button>
       <button class="dc-btn clear" onclick="clearCard()">Clear Card&nbsp;←</button>
-      <button class="dc-btn" id="layoutToggle" onclick="toggleLayout()">⛶ Adjust Layout</button>
-    </div>
-    <div class="layout-editor" id="layoutEditor" style="display:none">
-      <div class="le-preview" id="lePreview">
-        <div class="le-box card" id="leCard" data-item="card"><span>CARD</span></div>
-        <div class="le-box board" id="leBoard" data-item="board"><span>SCORE</span></div>
-      </div>
-      <div class="le-controls">
-        <div class="le-group">
-          <label>Card Size</label>
-          <input type="range" min="0.5" max="2" step="0.05" value="1" id="cardScale" oninput="setScale('card',this.value)"/>
-          <span id="cardScaleVal">100%</span>
-        </div>
-        <div class="le-group">
-          <label>Scoreboard Size</label>
-          <input type="range" min="0.5" max="2" step="0.05" value="1" id="boardScale" oninput="setScale('board',this.value)"/>
-          <span id="boardScaleVal">100%</span>
-        </div>
-        <button class="dc-btn" onclick="resetLayout()">Reset to Default</button>
-        <div class="le-hint">Drag the boxes to reposition · resize with the sliders.<br/>Changes go live on the display instantly and are remembered.</div>
-      </div>
     </div>
   </div>
 
@@ -478,9 +498,9 @@ function revealRank(){ publish({status:'reveal', ts:Date.now()}); }
 function clearCard(){ publish({status:'dismiss', ts:Date.now()}); }
 
 function toggleLayout(){
-  const ed=document.getElementById('layoutEditor');
-  const show=ed.style.display==='none';
-  ed.style.display=show?'block':'none';
+  const m=document.getElementById('layoutModal');
+  const show=!m.classList.contains('open');
+  m.classList.toggle('open',show);
   document.getElementById('layoutToggle').classList.toggle('active',show);
   if(show) renderLayoutEditor();
 }
