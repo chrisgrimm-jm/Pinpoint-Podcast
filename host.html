@@ -138,6 +138,30 @@ select option,select optgroup{background:#111;}
 .ac-val{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;color:#fff;}
 .ac.found .ac-val{color:#22c55e;}
 .ac.over .ac-rank{color:#3a2a2a;}.ac.over .ac-name{color:#3a2a2a;}.ac.over .ac-val{color:#3a2a2a;}
+
+/* ── DISPLAY CONTROLS ── */
+.display-ctrl{background:#111;border:1px solid #1e1e1e;border-radius:5px;padding:10px 14px;margin-bottom:14px;}
+.dc-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.dc-title{font-size:9px;letter-spacing:2.5px;text-transform:uppercase;color:#333;margin-right:4px;}
+.dc-btn{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:1px;background:transparent;color:#777;border:1px solid #2a2a2a;padding:7px 14px;border-radius:4px;cursor:pointer;transition:all .15s;}
+.dc-btn:hover{color:#fff;border-color:#444;}
+.dc-btn.reveal{color:#FBE23E;border-color:#5a5320;}
+.dc-btn.reveal:hover{background:#1a1808;border-color:#FBE23E;}
+.dc-btn.clear{color:#e63946;border-color:#3a1010;}
+.dc-btn.clear:hover{background:#1a0808;border-color:#e63946;}
+.dc-btn.active{color:#fff;border-color:#444;background:#1a1a1a;}
+.layout-editor{margin-top:12px;display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;}
+.le-preview{position:relative;width:320px;height:180px;background:#050505;border:1px solid #222;border-radius:4px;flex-shrink:0;overflow:hidden;background-image:linear-gradient(#0e0e0e 1px,transparent 1px),linear-gradient(90deg,#0e0e0e 1px,transparent 1px);background-size:32px 32px;}
+.le-box{position:absolute;border:1.5px solid;border-radius:3px;display:flex;align-items:center;justify-content:center;cursor:grab;touch-action:none;user-select:none;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:1px;overflow:hidden;}
+.le-box:active{cursor:grabbing;}
+.le-box.card{background:rgba(251,226,62,.14);border-color:#FBE23E;color:#FBE23E;}
+.le-box.board{background:rgba(78,168,222,.14);border-color:#4ea8de;color:#4ea8de;}
+.le-controls{display:flex;flex-direction:column;gap:12px;flex:1;min-width:220px;}
+.le-group{display:flex;align-items:center;gap:10px;}
+.le-group label{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#444;min-width:118px;}
+.le-group input[type=range]{flex:1;accent-color:#e63946;}
+.le-group span{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;color:#777;min-width:44px;text-align:right;}
+.le-hint{font-size:10px;color:#333;letter-spacing:0.5px;line-height:1.5;}
 </style>
 </head>
 <body>
@@ -348,6 +372,35 @@ select option,select optgroup{background:#111;}
     <div class="feedback" id="feedback"></div>
   </div>
 
+  <div class="display-ctrl">
+    <div class="dc-row">
+      <span class="dc-title">On-Air Card</span>
+      <button class="dc-btn reveal" onclick="revealRank()">★ Reveal Rank</button>
+      <button class="dc-btn clear" onclick="clearCard()">Clear Card&nbsp;←</button>
+      <button class="dc-btn" id="layoutToggle" onclick="toggleLayout()">⛶ Adjust Layout</button>
+    </div>
+    <div class="layout-editor" id="layoutEditor" style="display:none">
+      <div class="le-preview" id="lePreview">
+        <div class="le-box card" id="leCard" data-item="card"><span>CARD</span></div>
+        <div class="le-box board" id="leBoard" data-item="board"><span>SCORE</span></div>
+      </div>
+      <div class="le-controls">
+        <div class="le-group">
+          <label>Card Size</label>
+          <input type="range" min="0.5" max="2" step="0.05" value="1" id="cardScale" oninput="setScale('card',this.value)"/>
+          <span id="cardScaleVal">100%</span>
+        </div>
+        <div class="le-group">
+          <label>Scoreboard Size</label>
+          <input type="range" min="0.5" max="2" step="0.05" value="1" id="boardScale" oninput="setScale('board',this.value)"/>
+          <span id="boardScaleVal">100%</span>
+        </div>
+        <button class="dc-btn" onclick="resetLayout()">Reset to Default</button>
+        <div class="le-hint">Drag the boxes to reposition · resize with the sliders.<br/>Changes go live on the display instantly and are remembered.</div>
+      </div>
+    </div>
+  </div>
+
   <div class="scoreboard" id="scoreboard"></div>
 
   <div class="answers-section">
@@ -400,6 +453,106 @@ async function publish(state){
 
 // Restore saved topic
 (function(){ const t = localStorage.getItem('pp_topic'); if(t) document.getElementById('topicInput').value = t; })();
+
+// ── Display layout + card controls ─────────────────────────────────────────────
+// Layout is expressed as an offset (x,y in 1920x1080 stage px) from each element's
+// default anchored position, plus a scale multiplier. The display applies it as a
+// translate()+scale() transform, so 0/0/1 keeps the original design untouched.
+const LAYOUT_DEFAULT = {card:{x:0,y:0,scale:1}, board:{x:0,y:0,scale:1}};
+let layout = loadLayout();
+
+// Default element boxes in stage coordinates (card anchors top-left, board bottom-right)
+const LE_DEF = {
+  card:  {x:52,   y:46,  w:512, h:772, anchor:'tl'},
+  board: {x:1108, y:792, w:760, h:230, anchor:'br'}
+};
+const LE_PV = 320/1920; // preview px per stage px (preview is 320px wide)
+
+function loadLayout(){
+  try{ const s=localStorage.getItem('pp_layout'); if(s){ const p=JSON.parse(s); if(p&&p.card&&p.board) return p; } }catch(e){}
+  return JSON.parse(JSON.stringify(LAYOUT_DEFAULT));
+}
+function saveLayout(){ localStorage.setItem('pp_layout', JSON.stringify(layout)); }
+
+function revealRank(){ publish({status:'reveal', ts:Date.now()}); }
+function clearCard(){ publish({status:'dismiss', ts:Date.now()}); }
+
+function toggleLayout(){
+  const ed=document.getElementById('layoutEditor');
+  const show=ed.style.display==='none';
+  ed.style.display=show?'block':'none';
+  document.getElementById('layoutToggle').classList.toggle('active',show);
+  if(show) renderLayoutEditor();
+}
+
+let layoutPubTimer=null;
+function publishLayout(now){
+  saveLayout();
+  if(now){ if(layoutPubTimer){clearTimeout(layoutPubTimer);layoutPubTimer=null;} publish({status:'layout',layout,ts:Date.now()}); return; }
+  if(layoutPubTimer) return;
+  layoutPubTimer=setTimeout(()=>{ layoutPubTimer=null; publish({status:'layout',layout,ts:Date.now()}); }, 120);
+}
+
+function renderLayoutEditor(){
+  renderBox('card'); renderBox('board');
+  document.getElementById('cardScale').value=layout.card.scale;
+  document.getElementById('boardScale').value=layout.board.scale;
+  document.getElementById('cardScaleVal').textContent=Math.round(layout.card.scale*100)+'%';
+  document.getElementById('boardScaleVal').textContent=Math.round(layout.board.scale*100)+'%';
+}
+
+function renderBox(item){
+  const d=LE_DEF[item], L=layout[item];
+  const el=document.getElementById(item==='card'?'leCard':'leBoard');
+  const w=d.w*L.scale, h=d.h*L.scale;
+  let left, top;
+  if(d.anchor==='tl'){ left=d.x+L.x; top=d.y+L.y; }
+  else { const brx=d.x+d.w+L.x, bry=d.y+d.h+L.y; left=brx-w; top=bry-h; }
+  el.style.left=(left*LE_PV)+'px';
+  el.style.top=(top*LE_PV)+'px';
+  el.style.width=(w*LE_PV)+'px';
+  el.style.height=(h*LE_PV)+'px';
+}
+
+function setScale(item,v){
+  layout[item].scale=parseFloat(v);
+  document.getElementById(item+'ScaleVal').textContent=Math.round(parseFloat(v)*100)+'%';
+  renderBox(item);
+  publishLayout();
+}
+
+function resetLayout(){
+  layout=JSON.parse(JSON.stringify(LAYOUT_DEFAULT));
+  renderLayoutEditor();
+  publishLayout(true);
+}
+
+// Drag boxes in the preview to reposition (pointer events → stage-px offsets)
+let leDrag=null, leStartX=0, leStartY=0, leOrig=null;
+function leDown(e){
+  const box=e.currentTarget; leDrag=box.dataset.item;
+  leStartX=e.clientX; leStartY=e.clientY;
+  leOrig={x:layout[leDrag].x, y:layout[leDrag].y};
+  box.setPointerCapture(e.pointerId);
+  e.preventDefault();
+}
+function leMove(e){
+  if(!leDrag) return;
+  layout[leDrag].x=Math.round(leOrig.x+(e.clientX-leStartX)/LE_PV);
+  layout[leDrag].y=Math.round(leOrig.y+(e.clientY-leStartY)/LE_PV);
+  renderBox(leDrag);
+  publishLayout();
+}
+function leUp(){ if(leDrag){ leDrag=null; publishLayout(true); } }
+
+['leCard','leBoard'].forEach(id=>{
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.addEventListener('pointerdown',leDown);
+  el.addEventListener('pointermove',leMove);
+  el.addEventListener('pointerup',leUp);
+  el.addEventListener('pointercancel',leUp);
+});
 
 // ── Setup ──────────────────────────────────────────────────────────────────────
 let playerCount = 2;
@@ -929,6 +1082,7 @@ function pushState(){
       guesses: p.history.map(h=>({player:h.player,rank:h.rank,strike:h.strike,value:h.value})),
       color: PLAYER_COLORS[p.i%6]
     })),
+    layout: layout,
     ts: Date.now()
   });
 }
