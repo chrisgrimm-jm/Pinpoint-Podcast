@@ -216,9 +216,10 @@ select option,select optgroup{background:#111;}
       </div>
       <div class="le-btnrow">
         <button class="dc-btn testcard" onclick="sendTestCard()">▶ Send Test Card</button>
+        <button class="dc-btn clear" onclick="clearTestCard()">✕ Clear Test Card</button>
         <button class="dc-btn" onclick="resetLayout()">Reset to Default</button>
       </div>
-      <div class="le-hint">Drag the boxes to reposition · resize with the sliders.<br/>Send a test card to align against a real card + scoreboard on the OBS output — it clears automatically when you start the game.</div>
+      <div class="le-hint">Drag the boxes to reposition · resize with the sliders.<br/>Send a test card to align against a real card + scoreboard on the OBS output, then clear it when you're done.</div>
     </div>
   </div>
 </div>
@@ -505,6 +506,8 @@ function clearCard(){ publish({status:'dismiss', ts:Date.now()}); }
 
 // Publish a sample card + scoreboard so you can align the layout against a real
 // display before the game starts. Cleared automatically by startGame().
+function clearTestCard(){ publish({status:'reset', ts:Date.now()}); }
+
 function sendTestCard(){
   publish({
     status:'game',
@@ -783,7 +786,6 @@ async function startGame(){
   btn.disabled=true; ldmsg.style.display='block'; errEl.style.display='none';
 
   try {
-    publish({status:'reset', ts:Date.now()});   // clear any test card / prior game on the display
     const position=document.getElementById('positionSel').value;
     players=await fetchPlayers(group,statDef,season,pool,position);
     orderMode=document.getElementById('orderModeSel').value;
